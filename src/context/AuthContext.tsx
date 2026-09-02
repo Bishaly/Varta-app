@@ -100,87 +100,199 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Register
   const register = async (username: string, displayName: string, password: string, bio?: string) => {
     try {
+      const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_]/g, '');
+      if (cleanUsername.length < 3) {
+        return { success: false, error: 'User ID must be at least 3 characters (letters, numbers, underscore).' };
+      }
+
       // 1. Generate E2EE KeyPair
       const keyPair = await generateUserKeyPair();
       const pubJwk = await exportKeyToJwk(keyPair.publicKey);
       const privJwk = await exportKeyToJwk(keyPair.privateKey);
 
-      // 2. Register with server
-      const res = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username,
-          displayName,
-          password,
-          publicKeyJwk: pubJwk,
-          bio,
-        }),
-      });
+      // 2. Try registering with server API
+      let serverUser: User | null = null;
+      let serverToken: string | null = null;
 
-      const data = await res.json();
-      if (!res.ok) {
-        return { success: false, error: data.error || 'Registration failed' };
+      try {
+        const res = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: cleanUsername,
+            displayName,
+            password,
+            publicKeyJwk: pubJwk,
+            bio,
+          }),
+        });
+
+        const text = await res.text();
+        let data: any = null;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = null;
+        }
+
+        if (res.ok && data?.user) {
+          serverUser = data.user;
+          serverToken = data.token;
+        } else if (data && data.error) {
+          return { success: false, error: data.error };
+        }
+      } catch (networkErr) {
+        console.warn('Backend server unreachable, falling back to local storage:', networkErr);
       }
 
-      setUser(data.user);
-      setToken(data.token);
+      // 3. Fallback to local storage (for Android APK / Offline / Standalone mode)
+      const localUsersRaw = localStorage.getItem('varta_local_users_db');
+      const localUsers: Record<string, any> = localUsersRaw ? JSON.parse(localUsersRaw) : {};
+
+      if (!serverUser) {
+        const existing = Object.values(localUsers).find((u: any) => u.username === cleanUsername);
+        if (existing) {
+          return { success: false, error: 'User ID is already taken. Please choose another ID.' };
+        }
+
+        const userId = `usr_${Math.random().toString(36).substring(2, 10)}`;
+        const avatarColors = [
+          'from-emerald-500 to-teal-600',
+          'from-indigo-500 to-cyan-600',
+          'from-rose-500 to-pink-600',
+          'from-amber-500 to-orange-600',
+          'from-violet-500 to-purple-600',
+          'from-blue-500 to-sky-600',
+        ];
+        const avatarColor = avatarColors[Math.floor(Math.random() * avatarColors.length)];
+
+        serverUser = {
+          id: userId,
+          username: cleanUsername,
+          displayName,
+          avatarColor,
+          bio: bio || 'Varta private encrypted user',
+          publicKeyJwk: pubJwk,
+          twoFactorEnabled: false,
+          createdAt: Date.now(),
+          lastSeen: Date.now(),
+        };
+        serverToken = `token_${userId}_local_${Date.now()}`;
+      }
+
+      // Save locally
+      localUsers[serverUser.id] = {
+        ...serverUser,
+        passwordHash: password,
+      };
+      localStorage.setItem('varta_local_users_db', JSON.stringify(localUsers));
+
+      setUser(serverUser);
+      setToken(serverToken);
       setPrivateKey(keyPair.privateKey);
       setPublicKey(keyPair.publicKey);
       setPublicKeyJwk(pubJwk);
 
-      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(data.user));
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(serverUser));
       localStorage.setItem(LOCAL_STORAGE_PRIV_KEY, privJwk);
 
       return { success: true };
     } catch (err: any) {
-      return { success: false, error: err.message || 'Network error during registration' };
+      return { success: false, error: err.message || 'Error during identity creation' };
     }
   };
 
   // Login
   const login = async (username: string, password: string, totpToken?: string) => {
     try {
-      const res = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password, totpToken }),
-      });
+      const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_]/g, '');
 
-      const data = await res.json();
-      if (!res.ok) {
-        return { success: false, error: data.error || 'Login failed' };
+      // 1. Try server login
+      let loggedInUser: User | null = null;
+      let sessionToken: string | null = null;
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: cleanUsername, password, totpToken }),
+        });
+
+        const text = await res.text();
+        let data: any = null;
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = null;
+        }
+
+        if (res.ok && data?.user) {
+          loggedInUser = data.user;
+          sessionToken = data.token;
+        } else if (data?.needsTwoFactor) {
+          setNeedsTwoFactor(true);
+          setTempUserId(data.tempUserId);
+          setPendingCredentials({ username: cleanUsername, password });
+          return { success: false, needsTwoFactor: true };
+        } else if (data && data.error && res.status === 401) {
+          return { success: false, error: data.error };
+        }
+      } catch (netErr) {
+        console.warn('Server offline/unreachable, checking local storage:', netErr);
       }
 
-      if (data.needsTwoFactor) {
-        setNeedsTwoFactor(true);
-        setTempUserId(data.tempUserId);
-        setPendingCredentials({ username, password });
-        return { success: false, needsTwoFactor: true };
+      // 2. Fallback to local users storage
+      if (!loggedInUser) {
+        const localUsersRaw = localStorage.getItem('varta_local_users_db');
+        const localUsers: Record<string, any> = localUsersRaw ? JSON.parse(localUsersRaw) : {};
+        const matched = Object.values(localUsers).find(
+          (u: any) => u.username === cleanUsername || u.id === username
+        );
+
+        if (matched) {
+          if (matched.passwordHash === password) {
+            loggedInUser = {
+              id: matched.id,
+              username: matched.username,
+              displayName: matched.displayName,
+              avatarColor: matched.avatarColor,
+              bio: matched.bio,
+              publicKeyJwk: matched.publicKeyJwk,
+              twoFactorEnabled: matched.twoFactorEnabled || false,
+              createdAt: matched.createdAt,
+              lastSeen: Date.now(),
+            };
+            sessionToken = `token_${matched.id}_local`;
+          } else {
+            return { success: false, error: 'Incorrect password.' };
+          }
+        } else {
+          return { success: false, error: 'User ID not found. Please create an account.' };
+        }
       }
 
-      setUser(data.user);
-      setToken(data.token);
+      setUser(loggedInUser);
+      setToken(sessionToken);
       setNeedsTwoFactor(false);
       setTempUserId(null);
       setPendingCredentials(null);
 
-      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(data.user));
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(loggedInUser));
 
       // Check/Restore crypto keys
       const savedPrivJwk = localStorage.getItem(LOCAL_STORAGE_PRIV_KEY);
-      if (savedPrivJwk && data.user.publicKeyJwk) {
+      if (savedPrivJwk && loggedInUser.publicKeyJwk) {
         try {
           const privKey = await importPrivateKeyFromJwk(savedPrivJwk);
-          const pubKey = await importPublicKeyFromJwk(data.user.publicKeyJwk);
+          const pubKey = await importPublicKeyFromJwk(loggedInUser.publicKeyJwk);
           setPrivateKey(privKey);
           setPublicKey(pubKey);
-          setPublicKeyJwk(data.user.publicKeyJwk);
+          setPublicKeyJwk(loggedInUser.publicKeyJwk);
         } catch {
-          await initializeCryptoKeys(data.user);
+          await initializeCryptoKeys(loggedInUser);
         }
       } else {
-        await initializeCryptoKeys(data.user);
+        await initializeCryptoKeys(loggedInUser);
       }
 
       return { success: true };

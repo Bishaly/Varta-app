@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, User, Key, AlertCircle, ArrowRight, Check, Sparkles } from 'lucide-react';
+import { ShieldCheck, Lock, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 export const AuthModal: React.FC = () => {
-  const { login, register, verifyTwoFactorLogin, needsTwoFactor, quickSwitchUser } = useAuth();
+  const { login, register, verifyTwoFactorLogin, needsTwoFactor } = useAuth();
 
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [username, setUsername] = useState<string>('');
@@ -65,9 +65,6 @@ export const AuthModal: React.FC = () => {
             <ShieldCheck className="w-8 h-8" />
           </div>
           <h1 className="text-2xl font-bold text-slate-100 tracking-tight">Varta</h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Privacy-First E2EE Messenger • Zero Phone Numbers • 0 Kharcha
-          </p>
         </div>
 
         {/* Tab switch if not in 2FA mode */}
@@ -173,7 +170,7 @@ export const AuthModal: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
-                  Telegram-Style User ID (No Phone Number)
+                  User ID (No Phone Number Needed)
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-xs font-mono font-bold">
@@ -212,7 +209,7 @@ export const AuthModal: React.FC = () => {
                   <input
                     id="input-auth-bio"
                     type="text"
-                    placeholder="e.g. End-to-end encrypted | Open Source"
+                    placeholder="e.g. End-to-end encrypted"
                     value={bio}
                     onChange={(e) => setBio(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-emerald-500 transition-colors"
@@ -232,47 +229,6 @@ export const AuthModal: React.FC = () => {
             </>
           )}
         </form>
-
-        {/* Demo Fast Login Personas */}
-        {!needsTwoFactor && (
-          <div className="mt-6 pt-5 border-t border-slate-800">
-            <p className="text-[11px] font-semibold text-slate-400 text-center uppercase tracking-wider mb-2.5 flex items-center justify-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
-              1-Click Instant Demo Login
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                id="btn-demo-login-alice"
-                type="button"
-                onClick={() => quickSwitchUser('usr_cipher_alice')}
-                className="p-2.5 bg-slate-950 hover:bg-slate-800 border border-emerald-900/50 hover:border-emerald-500 rounded-xl flex items-center gap-2 transition-all text-left"
-              >
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
-                  A
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-200 truncate">Alice</p>
-                  <p className="text-[10px] text-slate-400 font-mono">@alice_sec</p>
-                </div>
-              </button>
-
-              <button
-                id="btn-demo-login-bob"
-                type="button"
-                onClick={() => quickSwitchUser('usr_cipher_bob')}
-                className="p-2.5 bg-slate-950 hover:bg-slate-800 border border-indigo-900/50 hover:border-indigo-500 rounded-xl flex items-center gap-2 transition-all text-left"
-              >
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-indigo-500 to-cyan-600 text-white font-bold text-xs flex items-center justify-center shrink-0">
-                  B
-                </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-200 truncate">Bob</p>
-                  <p className="text-[10px] text-slate-400 font-mono">@bob_dev</p>
-                </div>
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );

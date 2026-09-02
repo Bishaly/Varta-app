@@ -3,9 +3,8 @@
   "appName": "Varta",
   "webDir": "dist",
   "server": {
-    "url": "https://ais-pre-a7xthsxswxhbwdpvakwduy-49198566568.asia-east1.run.app",
-    "cleartext": true,
-    "androidScheme": "https"
+    "androidScheme": "https",
+    "cleartext": true
   },
   "android": {
     "allowMixedContent": true

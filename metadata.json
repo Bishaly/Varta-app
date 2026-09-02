@@ -1,0 +1,6 @@
+{
+  "name": "Varta - Private E2EE Messenger",
+  "description": "Zero-cost, privacy-first ID-based encrypted messaging app with 2FA, group chats, encrypted file sharing, voice notes, offline queue, and message scheduling.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

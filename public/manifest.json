@@ -1,0 +1,19 @@
+{
+  "short_name": "Varta",
+  "name": "Varta - Private E2EE Messenger",
+  "description": "Zero-Cost, Privacy-First End-to-End Encrypted Android Messenger",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "192x192 512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#030712",
+  "theme_color": "#030712",
+  "display": "standalone",
+  "orientation": "portrait",
+  "scope": "/"
+}
